@@ -16,6 +16,7 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
   const angularVelocity = useRef(0);
   const currentAngle = useRef(0);
   const lastTickIndex = useRef(-1);
+  const requestRef = useRef<number | null>(null);
 
   useEffect(() => {
     audioRef.current = new Audio('/tick.mp3');
@@ -29,10 +30,9 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
 
     const size = canvas.width;
     const center = size / 2;
-    const radius = center - 10;
+    const radius = center - 20;
     
-    // Aplica o limite de nomes visualmente
-    const displayEntries = entries.slice(0, settings.maxNames);
+    const displayEntries = entries.slice(0, settings.maxNames || 1000);
     const arc = (2 * Math.PI) / displayEntries.length;
 
     ctx.clearRect(0, 0, size, size);
@@ -44,7 +44,8 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
       ctx.moveTo(center, center);
       ctx.arc(center, center, radius, angle, angle + arc);
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.lineWidth = 2;
       ctx.stroke();
 
       ctx.save();
@@ -52,63 +53,75 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
       ctx.rotate(angle + arc / 2);
       ctx.textAlign = "right";
       ctx.fillStyle = "white";
-      const fontSize = displayEntries.length > 50 ? 10 : displayEntries.length > 20 ? 13 : 16;
+      const fontSize = displayEntries.length > 50 ? 10 : displayEntries.length > 20 ? 14 : 18;
       ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.fillText(text.length > 15 ? text.substring(0, 12) + "..." : text, radius - 25, 5);
+      const displayText = text.length > 15 ? text.substring(0, 12) + "..." : text;
+      ctx.fillText(displayText, radius - 30, fontSize / 3);
       ctx.restore();
     });
     
     ctx.beginPath();
-    ctx.arc(center, center, 45, 0, 2 * Math.PI);
+    ctx.arc(center, center, 40, 0, 2 * Math.PI);
     ctx.fillStyle = "white";
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
     ctx.fill();
+    ctx.shadowBlur = 0;
   }, [entries, settings.maxNames]);
 
   useEffect(() => { draw(); }, [draw, entries]);
 
-  const animate = () => {
-    const friction = 1 - (1 / (settings.spinTime * 60));
-    if (angularVelocity.current > 0.0008) {
+  const animate = useCallback(() => {
+    const friction = 1 - (1 / ((settings.spinTime || 10) * 60));
+    
+    if (angularVelocity.current > 0.0005) {
       angularVelocity.current *= friction;
       currentAngle.current += angularVelocity.current;
 
-      const displayCount = Math.min(entries.length, settings.maxNames);
+      const displayCount = Math.min(entries.length, settings.maxNames || 1000);
       const arc = (2 * Math.PI) / displayCount;
       const currentTick = Math.floor((currentAngle.current % (Math.PI * 2)) / arc);
       
       if (currentTick !== lastTickIndex.current) {
         if (audioRef.current) {
-          audioRef.current.volume = settings.volume / 100;
+          const vol = parseFloat(settings.volume);
+          const safeVolume = isFinite(vol) ? Math.max(0, Math.min(1, vol / 100)) : 0.5;
+          audioRef.current.volume = safeVolume;
           audioRef.current.currentTime = 0;
           audioRef.current.play().catch(() => {});
         }
         lastTickIndex.current = currentTick;
       }
       draw();
-      requestAnimationFrame(animate);
+      requestRef.current = requestAnimationFrame(animate);
     } else {
       setIsSpinning(false);
-      const displayCount = Math.min(entries.length, settings.maxNames);
+      const displayCount = Math.min(entries.length, settings.maxNames || 1000);
       const arc = (2 * Math.PI) / displayCount;
       const normalizedAngle = (2 * Math.PI - (currentAngle.current % (2 * Math.PI))) % (2 * Math.PI);
       const index = Math.floor(normalizedAngle / arc);
-      onWinner(entries[index]);
+      if (entries[index]) onWinner(entries[index]);
     }
-  };
+  }, [entries, settings, draw, onWinner, setIsSpinning]);
 
   const spin = () => {
-    if (entries.length < 2) return;
+    if (entries.length < 2 || angularVelocity.current > 0) return;
     setIsSpinning(true);
-    const baseSpeed = settings.spinSlowly ? 0.15 : 0.5;
-    angularVelocity.current = Math.random() * 0.25 + baseSpeed;
-    animate();
+    const baseSpeed = settings.spinSlowly ? 0.12 : 0.45;
+    angularVelocity.current = Math.random() * 0.3 + baseSpeed;
+    if (requestRef.current !== null) cancelAnimationFrame(requestRef.current);
+    requestRef.current = requestAnimationFrame(animate);
   };
 
+  useEffect(() => {
+    return () => { if (requestRef.current !== null) cancelAnimationFrame(requestRef.current); };
+  }, []);
+
   return (
-    <div className="relative cursor-pointer select-none" onClick={spin}>
-      <div className="absolute -right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 bg-blue-500" 
-           style={{ clipPath: 'polygon(100% 50%, 0 0, 0 100%)' }} />
-      <canvas ref={canvasRef} width={600} height={600} className="max-w-full h-auto drop-shadow-2xl" />
+    <div className="relative cursor-pointer select-none group" onClick={spin}>
+      <div className="absolute -right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white shadow-xl flex items-center justify-center" 
+           style={{ clipPath: 'polygon(100% 50%, 0 0, 20% 50%, 0 100%)' }} />
+      <canvas ref={canvasRef} width={600} height={600} className="max-w-full h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)]" />
     </div>
   );
 }

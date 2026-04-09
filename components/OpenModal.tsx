@@ -1,17 +1,38 @@
 "use client";
-import React, { useRef } from 'react';
-import { X, Cloud, Monitor, FileText, Info } from 'lucide-react';
+import React from 'react';
+import { X, HardDrive, FileText, UploadCloud } from 'lucide-react';
 
 interface OpenModalProps {
+  lang: 'pt' | 'en';
   onClose: () => void;
   onLoadData: (text: string) => void;
 }
 
-export default function OpenModal({ onClose, onLoadData }: OpenModalProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+const translations = {
+  pt: {
+    title: "Abrir Roda",
+    localTitle: "Ficheiro Local",
+    localDesc: "Escolha um ficheiro .txt do seu computador para carregar os nomes.",
+    selectFile: "Selecionar Ficheiro",
+    history: "Recentes (Neste Navegador)",
+    noHistory: "Nenhuma roda encontrada no armazenamento local.",
+    close: "Fechar"
+  },
+  en: {
+    title: "Open Wheel",
+    localTitle: "Local File",
+    localDesc: "Choose a .txt file from your computer to load the names.",
+    selectFile: "Select File",
+    history: "Recent (In this Browser)",
+    noHistory: "No wheels found in local storage.",
+    close: "Close"
+  }
+};
 
-  // Função para carregar arquivo localmente (.txt)
-  const handleLocalLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+export default function OpenModal({ lang, onClose, onLoadData }: OpenModalProps) {
+  const t = translations[lang];
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -24,86 +45,98 @@ export default function OpenModal({ onClose, onLoadData }: OpenModalProps) {
     reader.readAsText(file);
   };
 
-  // Função para simular carregamento na nuvem
-  const handleCloudLoad = () => {
-    alert("Conectando ao armazenamento em nuvem... (Simulação)");
-    // Aqui você integraria com Firebase ou Google Drive futuramente
-  };
-
   return (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#1e1e1e] w-full max-w-lg rounded-2xl shadow-2xl border border-white/10 overflow-hidden text-white">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#1e1e1e] w-full max-w-md rounded-[32px] border border-white/10 shadow-2xl overflow-hidden">
         
-        {/* CABEÇALHO */}
-        <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#252526]">
-          <h3 className="font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-            <FileText size={18} className="text-blue-500" /> Abrir Roda
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-[#252526]">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <FolderOpen className="text-blue-500" size={22} />
+            {t.title}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-white/5 rounded-full text-gray-400 transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
-        {/* CONTEÚDO */}
-        <div className="p-6 space-y-4">
-          <p className="text-xs text-gray-400 mb-6">
-            Escolha como você deseja carregar as suas listas de nomes:
-          </p>
-
-          <div className="grid grid-cols-1 gap-4">
-            {/* BOTÃO NUVEM */}
-            <button 
-              onClick={handleCloudLoad}
-              className="flex items-center gap-4 p-5 bg-[#2d2d2d] hover:bg-[#3d3d3d] border border-white/5 rounded-xl transition-all group"
-            >
-              <div className="w-12 h-12 bg-blue-600/20 rounded-full flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                <Cloud size={24} />
-              </div>
-              <div className="text-left">
-                <div className="font-bold text-sm">Carregar da Nuvem</div>
-                <div className="text-[11px] text-gray-500">Acesse suas rodas salvas na sua conta.</div>
-              </div>
-            </button>
-
-            {/* BOTÃO LOCAL */}
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-4 p-5 bg-[#2d2d2d] hover:bg-[#3d3d3d] border border-white/5 rounded-xl transition-all group"
-            >
-              <div className="w-12 h-12 bg-green-600/20 rounded-full flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform">
-                <Monitor size={24} />
-              </div>
-              <div className="text-left">
-                <div className="font-bold text-sm">Carregar Localmente</div>
-                <div className="text-[11px] text-gray-500">Abra um arquivo .txt do seu computador.</div>
-              </div>
-            </button>
+        {/* Conteúdo */}
+        <div className="p-8">
+          <div className="flex flex-col items-center text-center space-y-6">
+            <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 mb-2">
+              <FileText size={40} />
+            </div>
             
-            {/* Input de arquivo escondido */}
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">{t.localTitle}</h3>
+              <p className="text-sm text-gray-400 leading-relaxed px-4">
+                {t.localDesc}
+              </p>
+            </div>
+
             <input 
               type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
               accept=".txt" 
-              onChange={handleLocalLoad}
+              onChange={handleFileChange}
+              className="hidden" 
+              id="file-upload"
             />
+            
+            <label 
+              htmlFor="file-upload"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+            >
+              <UploadCloud size={20} />
+              {t.selectFile}
+            </label>
           </div>
 
-          <div className="mt-6 flex items-start gap-2 p-3 bg-blue-500/5 rounded-lg border border-blue-500/10">
-            <Info size={16} className="text-blue-500 shrink-0" />
-            <p className="text-[10px] text-gray-400 leading-relaxed">
-              Dica: Você também pode simplesmente colar os nomes diretamente na caixa de texto na página principal.
-            </p>
+          {/* Divisória Suave */}
+          <div className="mt-10 pt-6 border-t border-white/5">
+            <h4 className="text-[11px] font-black uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
+              <HardDrive size={12} />
+              {t.history}
+            </h4>
+            
+            <div className="bg-black/20 rounded-2xl p-6 border border-white/5 italic text-sm text-gray-600 text-center">
+              {t.noHistory}
+            </div>
           </div>
         </div>
 
-        {/* RODAPÉ */}
-        <div className="p-4 bg-[#252526] flex justify-end border-t border-white/5">
-          <button onClick={onClose} className="px-6 py-2 text-xs font-bold uppercase text-gray-400 hover:text-white transition-colors">
-            Fechar
+        {/* Footer */}
+        <div className="px-6 py-4 bg-[#181819] flex justify-end">
+          <button 
+            onClick={onClose}
+            className="text-sm font-bold text-gray-400 hover:text-white transition-colors"
+          >
+            {t.close}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+// Componente de ícone auxiliar (FolderOpen não estava no import inicial, adicionado aqui)
+function FolderOpen({ size, className }: { size: number, className: string }) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2" />
+    </svg>
   );
 }
