@@ -1,11 +1,15 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+
+export interface WheelEntry {
+  nome: string;
+  quantidade: number;
+}
 
 export function useWheelPersistence() {
-  const [rawText, setRawText] = useState("Beatriz\nEric\nGabriel\nAli\nCharles\nDiya\nFatima\nHanna");
+  const [rawText, setRawText] = useState("Beatriz, 1\nEric, 1\nGabriel, 1\nAli, 1\nCharles, 1\nDiya, 1\nFatima, 1\nHanna, 1");
   const [results, setResults] = useState<string[]>([]);
 
-  // Carregar dados ao iniciar
   useEffect(() => {
     const savedText = localStorage.getItem('won_raw_text');
     const savedResults = localStorage.getItem('won_results');
@@ -19,11 +23,29 @@ export function useWheelPersistence() {
     }
   }, []);
 
-  // Salvar sempre que houver mudança
   useEffect(() => {
     localStorage.setItem('won_raw_text', rawText);
     localStorage.setItem('won_results', JSON.stringify(results));
   }, [rawText, results]);
 
-  return { rawText, setRawText, results, setResults };
+  const parsedEntries = useMemo((): WheelEntry[] => {
+    return rawText
+      .split('\n')
+      .filter(line => line.trim() !== "")
+      .map(line => {
+        const [nome, qtd] = line.split(',');
+        return {
+          nome: nome.trim(),
+          quantidade: qtd ? parseInt(qtd.trim()) || 1 : 1
+        };
+      });
+  }, [rawText]);
+
+  return { 
+    rawText, 
+    setRawText, 
+    results, 
+    setResults, 
+    parsedEntries 
+  };
 }
