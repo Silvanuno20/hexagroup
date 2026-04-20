@@ -6,7 +6,7 @@ const COLORS = ['#FF3D00', '#3D5AFE', '#00E676', '#D500F9', '#FFFF00', '#00E5FF'
 interface WheelProps {
   entries: { nome: string; quantidade: number }[];
   settings: any;
-  onWinner: (name: string) => void;
+  onWinner: (name: string, probability: number) => void;
   setIsSpinning: (state: boolean) => void;
 }
 
@@ -73,24 +73,32 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
       draw();
       requestRef.current = requestAnimationFrame(animate);
     } else {
-      // RESET PARA PERMITIR NOVO GIRO
-      angularVelocity.current = 0; 
+      angularVelocity.current = 0;
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       
       setIsSpinning(false);
       const arc = (2 * Math.PI) / entries.length;
-      const normalizedAngle = (2 * Math.PI - (currentAngle.current % (2 * Math.PI))) % (2 * Math.PI);
-      const index = Math.floor(normalizedAngle / arc);
-      if (entries[index]) onWinner(entries[index].nome);
+      
+      // Ponteiro na lateral direita (ângulo 0 = aponta para a direita)
+      const pointerAngle = 0;
+      let rawAngle = (pointerAngle - currentAngle.current) % (2 * Math.PI);
+      if (rawAngle < 0) rawAngle += 2 * Math.PI;
+      const index = Math.floor(rawAngle / arc);
+      
+      if (entries[index]) {
+        const totalQtd = entries.reduce((acc, curr) => acc + curr.quantidade, 0);
+        const probability = (entries[index].quantidade / totalQtd) * 100;
+        onWinner(entries[index].nome, probability);
+      }
     }
   }, [entries, settings, draw, onWinner, setIsSpinning]);
 
   const spin = () => {
-    if (entries.length < 2 || angularVelocity.current > 0) return;
+    const validEntries = entries.filter(e => e.quantidade > 0);
+    if (validEntries.length < 2 || angularVelocity.current > 0) return;
+    
     setIsSpinning(true);
 
-    // LÓGICA PONDERADA: O sorteio considera a quantidade para decidir o vencedor,
-    // mas a roda continua com fatias iguais visualmente.
     const totalQtd = entries.reduce((acc, curr) => acc + curr.quantidade, 0);
     let random = Math.random() * totalQtd;
     let selectedIndex = 0;
@@ -106,8 +114,9 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
     const arc = (2 * Math.PI) / entries.length;
     const friction = 0.985 + (settings.spinTime / 1500);
     
-    // Calcula o ângulo para cair exatamente na fatia do vencedor sorteado por peso
-    const targetAngle = (2 * Math.PI) - (selectedIndex * arc) - (arc / 2);
+    // Ângulo alvo para que a fatia fique sob o ponteiro lateral (ângulo 0)
+    const pointerAngle = 0;
+    const targetAngle = pointerAngle - (selectedIndex * arc) - (arc / 2);
     const extraVoltas = Math.PI * 2 * 10;
     
     angularVelocity.current = (extraVoltas + targetAngle - (currentAngle.current % (2 * Math.PI))) * (1 - friction);
@@ -116,7 +125,8 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
 
   return (
     <div className="relative cursor-pointer" onClick={spin}>
-      <div className="absolute -right-4 top-1/2 -translate-y-1/2 z-30 w-12 h-10 bg-white" style={{ clipPath: 'polygon(100% 0%, 0% 50%, 100% 100%)' }} />
+      {/* Ponteiro fixo na lateral direita, apontando para dentro (centro) */}
+      <div className="absolute -right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-12 bg-white" style={{ clipPath: 'polygon(100% 0%, 0% 50%, 100% 100%)' }} />
       <canvas ref={canvasRef} width={600} height={600} className="max-w-full h-auto drop-shadow-2xl" />
     </div>
   );

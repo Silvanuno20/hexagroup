@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { X, BarChart3 } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface StatsPanelProps {
   entries: { nome: string; quantidade: number }[];
@@ -8,72 +8,47 @@ interface StatsPanelProps {
 }
 
 export default function StatsPanel({ entries, onClose }: StatsPanelProps) {
-  const totalQtd = entries.reduce((acc, curr) => acc + curr.quantidade, 0);
+  const total = entries.reduce((acc, e) => acc + e.quantidade, 0);
 
   return (
-    <div className="fixed inset-0 z-[700] flex items-center justify-end p-4 md:p-8 pointer-events-none">
-      {/* Backdrop para fechar ao clicar fora (opcional) */}
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
-      
-      {/* Painel Flutuante */}
-      <div className="relative w-full max-w-md h-[80vh] bg-[#0f0f0f] border border-white/10 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden pointer-events-auto animate-in slide-in-from-right duration-300">
-        
-        {/* Header do Painel */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/20">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-              <BarChart3 size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-widest text-white">Probabilidades</h3>
-              <p className="text-[10px] text-gray-500 font-bold uppercase">Análise de Stock Real</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-gray-500 transition-all">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-[#0f0f0f] border border-white/10 rounded-[48px] w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-white/5">
+          <h2 className="text-xl font-black uppercase tracking-wider text-white">Probabilidades</h2>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl text-gray-400">
             <X size={20} />
           </button>
         </div>
-
-        {/* Lista de Probabilidades */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-          {entries.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-700">
-              <p className="text-xs uppercase font-black tracking-widest">Sem dados para analisar</p>
-            </div>
-          ) : (
-            entries.map((item, i) => {
-              const porcentagem = totalQtd > 0 ? ((item.quantidade / totalQtd) * 100).toFixed(1) : "0";
-              
-              return (
-                <div key={i} className="group bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 p-4 rounded-3xl transition-all">
-                  <div className="flex justify-between items-end mb-3">
-                    <span className="font-bold text-gray-200">{item.nome}</span>
-                    <div className="text-right">
-                      <span className="text-xl font-black text-blue-500 leading-none">{porcentagem}%</span>
-                    </div>
-                  </div>
-                  
-                  {/* Barra de Progresso */}
-                  <div className="w-full h-2 bg-black rounded-full overflow-hidden border border-white/5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-blue-600 to-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.3)] transition-all duration-1000 ease-out" 
-                      style={{ width: `${porcentagem}%` }}
-                    />
-                  </div>
-                  
-                  <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-tighter text-gray-600">
-                    <span>{item.quantidade} Unidades em Stock</span>
-                    <span>Total: {totalQtd}</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
         
-        {/* Footer Info */}
-        <div className="p-6 bg-black/40 text-center text-[9px] text-gray-700 font-bold uppercase tracking-[2px]">
-          Builders World • Sorteio Ponderado
+        <div className="p-6 overflow-y-auto max-h-[60vh] custom-scrollbar">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-xs font-black uppercase tracking-widest text-gray-500 border-b border-white/5">
+                <th className="pb-3">Produto</th>
+                <th className="pb-3 text-center">Qtd</th>
+                <th className="pb-3 text-right">Probabilidade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {entries.map((item, i) => {
+                const percent = total > 0 ? ((item.quantidade / total) * 100).toFixed(1) : '0.0';
+                const colors = ['#FF3D00', '#3D5AFE', '#00E676', '#D500F9', '#FFFF00', '#00E5FF'];
+                return (
+                  <tr key={i} className="text-sm">
+                    <td className="py-3 flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[i % colors.length] }}></span>
+                      <span className="font-medium">{item.nome}</span>
+                    </td>
+                    <td className="py-3 text-center text-gray-400">{item.quantidade}</td>
+                    <td className="py-3 text-right text-blue-400 font-mono">{percent}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {entries.length === 0 && (
+            <p className="text-center text-gray-500 py-8">Nenhum produto adicionado.</p>
+          )}
         </div>
       </div>
     </div>

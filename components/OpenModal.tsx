@@ -2,10 +2,14 @@
 import React from 'react';
 import { X, HardDrive, FileText, UploadCloud } from 'lucide-react';
 
+// 1. Atualizamos a interface para aceitar as novas props do Supabase
 interface OpenModalProps {
   lang: 'pt' | 'en';
   onClose: () => void;
   onLoadData: (text: string) => void;
+  // Novas propriedades adicionadas abaixo:
+  listWheels: () => Promise<any[]>; 
+  onLoadWheel: (wheelId: string) => Promise<void>;
 }
 
 const translations = {
@@ -29,7 +33,14 @@ const translations = {
   }
 };
 
-export default function OpenModal({ lang, onClose, onLoadData }: OpenModalProps) {
+// 2. Adicionamos as novas props na desestruturação do componente
+export default function OpenModal({ 
+  lang, 
+  onClose, 
+  onLoadData, 
+  listWheels, 
+  onLoadWheel 
+}: OpenModalProps) {
   const t = translations[lang];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,6 +113,7 @@ export default function OpenModal({ lang, onClose, onLoadData }: OpenModalProps)
             </h4>
             
             <div className="bg-black/20 rounded-2xl p-6 border border-white/5 italic text-sm text-gray-600 text-center">
+              {/* Futuramente você poderá usar listWheels() aqui para listar as rodas do Supabase */}
               {t.noHistory}
             </div>
           </div>
@@ -121,7 +133,6 @@ export default function OpenModal({ lang, onClose, onLoadData }: OpenModalProps)
   );
 }
 
-// Componente de ícone auxiliar (FolderOpen não estava no import inicial, adicionado aqui)
 function FolderOpen({ size, className }: { size: number, className: string }) {
   return (
     <svg 

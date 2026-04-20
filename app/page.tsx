@@ -15,29 +15,41 @@ import OpenModal from '@/components/OpenModal';
 import ShareModal from '@/components/ShareModal';
 import StatsPanel from '@/components/StatsPanel';
 import { useWheelPersistence } from '@/hooks/useWheelPersistence';
+import { supabase } from '@/hooks/supabaseClient'; // Mantido apenas para o syncStatus
 
-// 1. Definição das traduções (Corrige o erro "Cannot find name translations")
 const translations = {
   pt: {
     new: "Novo", open: "Abrir", save: "Salvar", share: "Partilhar",
     entries: "Entradas", results: "Resultados", chances: "Chances",
-    placeholder: "Nome", winnerMsg: "Temos um vencedor!", continue: "Continuar"
+    placeholder: "Nome", winnerMsg: "Temos um vencedor!", continue: "Continuar",
+    saveName: "Nome da roda"
   },
   en: {
     new: "New", open: "Open", save: "Save", share: "Share",
     entries: "Entries", results: "Results", chances: "Chances",
-    placeholder: "Name", winnerMsg: "We have a winner!", continue: "Continue"
+    placeholder: "Name", winnerMsg: "We have a winner!", continue: "Continue",
+    saveName: "Wheel name"
   }
 };
 
 export default function WheelPage() {
-  // Hook personalizado (Verifique se o arquivo existe em @/hooks/useWheelPersistence)
-  const { rawText, setRawText, results, setResults, parsedEntries } = useWheelPersistence();
+  // Hook atualizado com suporte a Supabase
+  const { 
+    rawText, setRawText, 
+    results, setResults, 
+    parsedEntries,
+    currentWheelId,
+    loading: dbLoading,
+    saveToSupabase,
+    loadFromSupabase,
+    listWheels,
+    addResult,
+    clearResults
+  } = useWheelPersistence();
   
   const [lang, setLang] = useState<'pt' | 'en'>('pt');
   const t = translations[lang];
 
-  // Estados de Fullscreen e Vencedor
   const wheelContainerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenWinner, setFullscreenWinner] = useState<string | null>(null);
@@ -48,8 +60,8 @@ export default function WheelPage() {
   });
   const [winner, setWinner] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline'>('offline');
 
-  // Estado de configurações
   const [appSettings, setAppSettings] = useState({
     volume: 50,
     launchConfetti: true,
@@ -59,6 +71,15 @@ export default function WheelPage() {
     spinTime: 10,
     maxNames: 1000
   });
+
+  // Monitorar conexão com Supabase Realtime (apenas para ícone de status)
+  useEffect(() => {
+    const channel = supabase.channel('status')
+      .subscribe((status) => {
+        setSyncStatus(status === 'SUBSCRIBED' ? 'online' : 'offline');
+      });
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -80,7 +101,6 @@ export default function WheelPage() {
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
-  // Tipagem para reduzir erro de 'any' no reduce
   const totalQuantidade = parsedEntries.reduce((acc: number, curr: { quantidade: number }) => acc + curr.quantidade, 0);
 
   const addItem = () => {
@@ -98,7 +118,19 @@ export default function WheelPage() {
   const handleNew = () => {
     if (window.confirm(lang === 'pt' ? 'Limpar tudo?' : 'Clear all?')) {
       setRawText("");
-      setResults([]);
+      clearResults();  // limpa histórico local e não afeta BD
+      // Opcional: se quiseres também desassociar a roda atual da BD, podes definir currentWheelId = null, mas isso é interno ao hook
+    }
+  };
+
+  // Handler para salvar a roda atual (chamado pelo SaveModal)
+  const handleSaveWheel = async (wheelName: string) => {
+    try {
+      await saveToSupabase(wheelName);
+      alert(lang === 'pt' ? 'Roda salva com sucesso!' : 'Wheel saved successfully!');
+    } catch (error) {
+      alert(lang === 'pt' ? 'Erro ao salvar' : 'Error saving');
+      console.error(error);
     }
   };
 
@@ -111,7 +143,10 @@ export default function WheelPage() {
             <Image src="/images/kzz.gif" alt="Logo" fill className="object-contain" unoptimized />
           </div>
           <div>
-            <h1 className="text-sm font-black tracking-tight text-white uppercase leading-none">Builders</h1>
+            <h1 className="text-sm font-black tracking-tight text-white uppercase leading-none flex items-center gap-2">
+              Builders
+              <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${syncStatus === 'online' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500'}`} />
+            </h1>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">World</p>
           </div>
           <div className="h-8 w-px bg-white/10 mx-6 hidden md:block" />
@@ -130,55 +165,58 @@ export default function WheelPage() {
 
       <main className="flex-1 p-6 md:p-10 flex flex-col md:flex-row gap-8 overflow-hidden bg-[radial-gradient(circle_at_top,_#111_0%,_#050505_100%)]">
         
-        <div 
-          ref={wheelContainerRef}
-          className={`flex-1 bg-[#0f0f0f] rounded-[48px] border border-white/5 flex items-center justify-center relative shadow-2xl overflow-hidden group transition-all ${isFullscreen ? 'rounded-none border-none bg-black' : ''}`}
-        >
-          {/* Botão Tela Cheia */}
-          <button 
-            onClick={toggleFullscreen}
-            className="absolute top-8 right-10 p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-500 hover:text-white transition-all border border-white/5 z-50 shadow-xl backdrop-blur-md"
+        <div className="flex-1 flex items-center justify-center">
+          <div 
+            ref={wheelContainerRef}
+            className={`bg-[#0f0f0f] rounded-[48px] border border-white/5 flex items-center justify-center relative shadow-2xl overflow-hidden group transition-all w-full h-full ${isFullscreen ? 'rounded-none border-none bg-black' : ''}`}
           >
-            {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
-          </button>
+            <button 
+              onClick={toggleFullscreen}
+              className="absolute top-8 right-10 p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-500 hover:text-white transition-all border border-white/5 z-50 shadow-xl backdrop-blur-md"
+            >
+              {isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+            </button>
 
-          {/* Vencedor em Tela Cheia */}
-          {isFullscreen && fullscreenWinner && (
-            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500 text-center">
-              <Trophy size={48} className="text-blue-500 mb-4" />
-              <h3 className="text-blue-500 font-black uppercase text-xs tracking-[8px] mb-4">{t.winnerMsg}</h3>
-              <div className="text-7xl font-black text-white mb-10">{fullscreenWinner}</div>
-              <button onClick={() => setFullscreenWinner(null)} className="px-10 py-5 bg-white text-black font-black rounded-2xl uppercase tracking-[2px] hover:bg-gray-200 transition-all">
-                {t.continue}
-              </button>
-            </div>
-          )}
+            {isFullscreen && fullscreenWinner && (
+              <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500 text-center">
+                <Trophy size={48} className="text-blue-500 mb-4" />
+                <h3 className="text-blue-500 font-black uppercase text-xs tracking-[8px] mb-4">{t.winnerMsg}</h3>
+                <div className="text-7xl font-black text-white mb-10">{fullscreenWinner}</div>
+                <button onClick={() => setFullscreenWinner(null)} className="px-10 py-5 bg-white text-black font-black rounded-2xl uppercase tracking-[2px] hover:bg-gray-200 transition-all">
+                  {t.continue}
+                </button>
+              </div>
+            )}
 
-          {!isFullscreen && (
-            <div className="absolute top-8 left-10 flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-              <span className="text-[10px] font-black uppercase tracking-[4px] text-gray-600">The Builders Space</span>
-            </div>
-          )}
-          
-          <WheelCanvas 
-            entries={parsedEntries} 
-            settings={appSettings} 
-            setIsSpinning={setIsSpinning} 
-            onWinner={(n) => {
-              setResults((prev: string[]) => [n, ...prev]);
-              if (isFullscreen) {
-                setFullscreenWinner(n);
-              } else {
-                setWinner(n);
-              }
-              if (appSettings.launchConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-            }} 
-          />
+            {!isFullscreen && (
+              <div className="absolute top-8 left-10 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                <span className="text-[10px] font-black uppercase tracking-[4px] text-gray-600">The Builders Space</span>
+              </div>
+            )}
+            
+            <WheelCanvas 
+              entries={parsedEntries} 
+              settings={appSettings} 
+              setIsSpinning={setIsSpinning} 
+              onWinner={async (nome, probabilidade) => {
+                // Usa a função addResult do hook (atualiza localStorage e Supabase)
+                await addResult(nome);
+                
+                // Atualização visual local
+                if (isFullscreen) {
+                  setFullscreenWinner(nome);
+                } else {
+                  setWinner(nome);
+                }
+                if (appSettings.launchConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+              }} 
+            />
+          </div>
         </div>
 
         {!isFullscreen && (
-          <div className="w-full md:w-[420px] flex flex-col gap-6">
+          <div className="w-full md:w-[420px] flex flex-col gap-6 h-full max-h-[calc(100vh-10rem)]">
             <div className="bg-[#0f0f0f] rounded-[48px] border border-white/5 flex flex-col flex-1 shadow-2xl overflow-hidden">
               <div className="flex p-2 bg-black/40 border-b border-white/5">
                 <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')} label={`${t.entries} (${totalQuantidade})`} />
@@ -232,8 +270,28 @@ export default function WheelPage() {
 
       {modals.stats && <StatsPanel entries={parsedEntries} onClose={() => setModals({...modals, stats: false})} />}
       {modals.settings && <SettingsModal lang={lang} settings={appSettings} setSettings={setAppSettings} onClose={() => setModals({...modals, settings: false})} />}
-      {modals.save && <SaveModal lang={lang} onClose={() => setModals({...modals, save: false})} entries={rawText.split('\n')} />}
-      {modals.open && <OpenModal lang={lang} onClose={() => setModals({...modals, open: false})} onLoadData={(data) => setRawText(data)} />}
+      
+      {/* SaveModal adaptado para usar a BD: passa a função onSave */}
+      {modals.save && (
+        <SaveModal 
+          lang={lang} 
+          onClose={() => setModals({...modals, save: false})} 
+          entries={rawText.split('\n')} 
+          onSave={handleSaveWheel}   // <-- nova prop
+        />
+      )}
+      
+      {/* OpenModal adaptado para usar a BD: passa listWheels e onLoadWheel */}
+      {modals.open && (
+        <OpenModal 
+          lang={lang} 
+          onClose={() => setModals({...modals, open: false})} 
+          onLoadData={(data) => setRawText(data)}  // fallback para ficheiros locais (opcional)
+          listWheels={listWheels}                 // <-- nova prop
+          onLoadWheel={loadFromSupabase}          // <-- nova prop
+        />
+      )}
+      
       {modals.share && <ShareModal lang={lang} onClose={() => setModals({...modals, share: false})} />}
 
       {winner && !isSpinning && (

@@ -1,11 +1,13 @@
 "use client";
 import React, { useState } from 'react';
-import { X, Save, Download } from 'lucide-react';
+import { X, Save, Download, CloudUpload } from 'lucide-react'; // Adicionei CloudUpload para o visual
 
 interface SaveModalProps {
   lang: 'pt' | 'en';
   onClose: () => void;
   entries: string[];
+  // 1. Adicionamos a prop onSave na interface
+  onSave: (wheelName: string) => Promise<void>; 
 }
 
 const translations = {
@@ -13,8 +15,11 @@ const translations = {
     title: "Salvar Roda",
     saveLocal: "Descarregar Ficheiro",
     saveLocalDesc: "A lista será guardada como um ficheiro .txt no seu computador.",
+    saveCloud: "Salvar na Nuvem",
+    saveCloudDesc: "Sincronize esta roda com a sua conta para aceder em qualquer lugar.",
     placeholder: "Ex: Nomes para o Sorteio",
     btnDownload: "Descarregar agora",
+    btnSave: "Salvar no Banco de Dados",
     close: "Cancelar",
     wheelNameLabel: "Dê um nome à sua lista"
   },
@@ -22,18 +27,22 @@ const translations = {
     title: "Save Wheel",
     saveLocal: "Download File",
     saveLocalDesc: "The list will be saved as a .txt file on your computer.",
+    saveCloud: "Save to Cloud",
+    saveCloudDesc: "Sync this wheel to your account to access it anywhere.",
     placeholder: "Ex: Names for Raffle",
     btnDownload: "Download now",
+    btnSave: "Save to Database",
     close: "Cancel",
     wheelNameLabel: "Give your list a name"
   }
 };
 
-export default function SaveModal({ lang, onClose, entries }: SaveModalProps) {
+export default function SaveModal({ lang, onClose, entries, onSave }: SaveModalProps) {
   const t = translations[lang];
   const [wheelName, setWheelName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Função única: Download do ficheiro .txt
+  // Função para Download do ficheiro .txt
   const downloadTxtFile = () => {
     const element = document.createElement("a");
     const file = new Blob([entries.join('\n')], { type: 'text/plain' });
@@ -42,7 +51,24 @@ export default function SaveModal({ lang, onClose, entries }: SaveModalProps) {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
-    onClose(); // Fecha o modal após o download
+    onClose();
+  };
+
+  // 2. Função para disparar o salvamento no Supabase
+  const handleCloudSave = async () => {
+    if (!wheelName.trim()) {
+      alert(lang === 'pt' ? "Por favor, dê um nome à roda" : "Please give the wheel a name");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onSave(wheelName);
+      onClose();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -60,7 +86,7 @@ export default function SaveModal({ lang, onClose, entries }: SaveModalProps) {
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-4">
           {/* Campo de Nome */}
           <div className="space-y-2">
             <label className="text-[11px] font-black uppercase text-gray-500 tracking-widest px-1">
@@ -76,17 +102,30 @@ export default function SaveModal({ lang, onClose, entries }: SaveModalProps) {
             />
           </div>
 
-          {/* Área de Download Única */}
-          <div className="p-5 bg-blue-500/5 rounded-3xl border border-blue-500/10 space-y-4 text-center">
-            <div className="mx-auto w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500">
-              <Download size={24} />
+          {/* Opção 1: Salvar na Nuvem (Supabase) */}
+          <div className="p-4 bg-blue-500/10 rounded-3xl border border-blue-500/20 space-y-3">
+            <div className="flex items-center gap-3 text-blue-400">
+              <CloudUpload size={18} />
+              <span className="text-xs font-bold uppercase tracking-wider">{t.saveCloud}</span>
             </div>
-            <p className="text-xs text-gray-400 px-2">
-              {t.saveLocalDesc}
-            </p>
+            <button 
+              onClick={handleCloudSave}
+              disabled={isSaving}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95"
+            >
+              {isSaving ? "..." : t.btnSave}
+            </button>
+          </div>
+
+          {/* Opção 2: Download Local */}
+          <div className="p-4 bg-white/5 rounded-3xl border border-white/5 space-y-3">
+             <div className="flex items-center gap-3 text-gray-400">
+              <Download size={18} />
+              <span className="text-xs font-bold uppercase tracking-wider">{t.saveLocal}</span>
+            </div>
             <button 
               onClick={downloadTxtFile}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+              className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-sm transition-all active:scale-95"
             >
               {t.btnDownload}
             </button>
