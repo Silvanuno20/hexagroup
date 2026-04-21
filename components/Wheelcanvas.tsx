@@ -12,15 +12,36 @@ interface WheelProps {
 
 export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning }: WheelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const angularVelocity = useRef(0);
   const currentAngle = useRef(0);
   const lastTickIndex = useRef(-1);
   const requestRef = useRef<number | null>(null);
 
   useEffect(() => {
-    audioRef.current = new Audio('/tick.mp3');
+    audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
   }, []);
+
+  const playTick = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(800 + Math.random() * 400, ctx.currentTime);
+
+    // 🔊 VOLUME CONTROLADO PELO SETTINGS
+    gain.gain.setValueAtTime(settings.volume / 100, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001 * (settings.volume / 100), ctx.currentTime + 0.05);
+
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.05);
+  }, [settings.volume]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -56,7 +77,6 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
       ctx.restore();
     });
 
-    // Círculo Central
     ctx.beginPath();
     ctx.arc(center, center, 40, 0, 2 * Math.PI);
     ctx.fillStyle = "white";
@@ -70,6 +90,17 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
     if (angularVelocity.current > 0.0005) {
       angularVelocity.current *= friction;
       currentAngle.current += angularVelocity.current;
+
+      const arc = (2 * Math.PI) / entries.length;
+      const currentIndex = Math.floor(
+        ((currentAngle.current % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) / arc
+      );
+
+      if (currentIndex !== lastTickIndex.current) {
+        lastTickIndex.current = currentIndex;
+        playTick();
+      }
+
       draw();
       requestRef.current = requestAnimationFrame(animate);
     } else {
@@ -79,7 +110,6 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
       setIsSpinning(false);
       const arc = (2 * Math.PI) / entries.length;
       
-      // Ponteiro na lateral direita (ângulo 0 = aponta para a direita)
       const pointerAngle = 0;
       let rawAngle = (pointerAngle - currentAngle.current) % (2 * Math.PI);
       if (rawAngle < 0) rawAngle += 2 * Math.PI;
@@ -91,13 +121,14 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
         onWinner(entries[index].nome, probability);
       }
     }
-  }, [entries, settings, draw, onWinner, setIsSpinning]);
+  }, [entries, settings, draw, onWinner, setIsSpinning, playTick]);
 
   const spin = () => {
     const validEntries = entries.filter(e => e.quantidade > 0);
     if (validEntries.length < 2 || angularVelocity.current > 0) return;
     
     setIsSpinning(true);
+    lastTickIndex.current = -1;
 
     const totalQtd = entries.reduce((acc, curr) => acc + curr.quantidade, 0);
     let random = Math.random() * totalQtd;
@@ -114,7 +145,6 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
     const arc = (2 * Math.PI) / entries.length;
     const friction = 0.985 + (settings.spinTime / 1500);
     
-    // Ângulo alvo para que a fatia fique sob o ponteiro lateral (ângulo 0)
     const pointerAngle = 0;
     const targetAngle = pointerAngle - (selectedIndex * arc) - (arc / 2);
     const extraVoltas = Math.PI * 2 * 10;
@@ -125,7 +155,6 @@ export default function WheelCanvas({ entries, settings, onWinner, setIsSpinning
 
   return (
     <div className="relative cursor-pointer" onClick={spin}>
-      {/* Ponteiro fixo na lateral direita, apontando para dentro (centro) */}
       <div className="absolute -right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-12 bg-white" style={{ clipPath: 'polygon(100% 0%, 0% 50%, 100% 100%)' }} />
       <canvas ref={canvasRef} width={600} height={600} className="max-w-full h-auto drop-shadow-2xl" />
     </div>
