@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { X, Volume2, Trophy, Clock, Trash2, PartyPopper } from 'lucide-react';
+import { X, Volume2, Trophy, Clock, Trash2, PartyPopper, Dices } from 'lucide-react';
 
 interface SettingsModalProps {
   lang: 'pt' | 'en';
@@ -18,7 +18,10 @@ const translations = {
     popup: "Mostrar Janela do Vencedor",
     removeBtn: "Mostrar botão 'Remover' no resultado",
     msgLabel: "Mensagem de Vitória",
-    close: "Fechar"
+    close: "Fechar",
+    modeLabel: "Modo de Probabilidade",
+    autoMode: "Automático (Stock)",
+    manualMode: "Manual (Peso)"
   },
   en: {
     title: "Customize",
@@ -28,7 +31,10 @@ const translations = {
     popup: "Show Winner Popup",
     removeBtn: "Show 'Remove' button on result",
     msgLabel: "Victory Message",
-    close: "Close"
+    close: "Close",
+    modeLabel: "Probability Mode",
+    autoMode: "Automatic (Stock)",
+    manualMode: "Manual (Weight)"
   }
 };
 
@@ -50,6 +56,30 @@ export default function SettingsModal({ lang, settings, setSettings, onClose }: 
         </div>
 
         <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          
+          {/* Novo: Seletor de Modo Automático/Manual */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-bold text-gray-300">
+              <Dices size={18} className="text-blue-500" /> {t.modeLabel}
+            </label>
+            <div className="flex p-1 bg-black/40 rounded-2xl border border-white/5">
+              <button 
+                onClick={() => update('probMode', 'automatic')}
+                className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${settings.probMode === 'automatic' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                {t.autoMode}
+              </button>
+              <button 
+                onClick={() => update('probMode', 'manual')}
+                className={`flex-1 py-3 text-xs font-bold rounded-xl transition-all ${settings.probMode === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                {t.manualMode}
+              </button>
+            </div>
+          </div>
+
+          <div className="h-px bg-white/5 my-2" />
+
           {/* Volume */}
           <div className="space-y-3">
             <label className="flex items-center gap-2 text-sm font-bold text-gray-300">

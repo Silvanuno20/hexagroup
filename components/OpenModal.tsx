@@ -1,153 +1,158 @@
 "use client";
-import React from 'react';
-import { X, HardDrive, FileText, UploadCloud } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { X, Database, Loader2, ChevronRight, ArrowLeft, Clock, Search, LayoutGrid, List, FileUp } from 'lucide-react';
 
-// 1. Atualizamos a interface para aceitar as novas props do Supabase
-interface OpenModalProps {
-  lang: 'pt' | 'en';
-  onClose: () => void;
-  onLoadData: (text: string) => void;
-  // Novas propriedades adicionadas abaixo:
-  listWheels: () => Promise<any[]>; 
-  onLoadWheel: (wheelId: string) => Promise<void>;
-}
+export default function OpenModal({ lang, onClose, listWheels, onLoadWheel, setRawText }: any) {
+  const [view, setView] = useState<'menu' | 'cloud'>('menu');
+  const [wheels, setWheels] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-const translations = {
-  pt: {
-    title: "Abrir Roda",
-    localTitle: "Ficheiro Local",
-    localDesc: "Escolha um ficheiro .txt do seu computador para carregar os nomes.",
-    selectFile: "Selecionar Ficheiro",
-    history: "Recentes (Neste Navegador)",
-    noHistory: "Nenhuma roda encontrada no armazenamento local.",
-    close: "Fechar"
-  },
-  en: {
-    title: "Open Wheel",
-    localTitle: "Local File",
-    localDesc: "Choose a .txt file from your computer to load the names.",
-    selectFile: "Select File",
-    history: "Recent (In this Browser)",
-    noHistory: "No wheels found in local storage.",
-    close: "Close"
-  }
-};
+  useEffect(() => {
+    if (view === 'cloud') {
+      setIsLoading(true);
+      listWheels().then(setWheels).finally(() => setIsLoading(false));
+    }
+  }, [view, listWheels]);
 
-// 2. Adicionamos as novas props na desestruturação do componente
-export default function OpenModal({ 
-  lang, 
-  onClose, 
-  onLoadData, 
-  listWheels, 
-  onLoadWheel 
-}: OpenModalProps) {
-  const t = translations[lang];
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Lógica para carregar ficheiro local (.txt)
+  const handleLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      onLoadData(content);
+      setRawText(content);
       onClose();
     };
     reader.readAsText(file);
   };
 
+  const filtered = useMemo(() => {
+    const results = wheels.filter(w => w.name?.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Se não estiver em modo "grelha" e não houver pesquisa, mostra apenas 4
+    if (!showAll && searchTerm === "") {
+      return results.slice(0, 4);
+    }
+    return results;
+  }, [wheels, searchTerm, showAll]);
+
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#1e1e1e] w-full max-w-md rounded-[32px] border border-white/10 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className={`bg-[#0a0a0a] w-full rounded-[32px] border border-white/10 flex flex-col transition-all duration-300 shadow-2xl overflow-hidden ${showAll ? 'max-w-4xl h-[80vh]' : 'max-w-md h-[550px]'}`}>
         
         {/* Header */}
-        <div className="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-[#252526]">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <FolderOpen className="text-blue-500" size={22} />
-            {t.title}
-          </h2>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-white/5 rounded-full text-gray-400 transition-colors"
-          >
+        <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
+          <div className="flex items-center gap-3">
+            {view !== 'menu' && (
+              <button onClick={() => { setView('menu'); setShowAll(false); }} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <ArrowLeft size={20} />
+              </button>
+            )}
+            <h2 className="font-black uppercase tracking-tighter text-lg">
+              {view === 'menu' ? 'Abrir Projeto' : (showAll ? 'Biblioteca de Rodas' : 'Recentes')}
+            </h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-gray-500 transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        {/* Conteúdo */}
-        <div className="p-8">
-          <div className="flex flex-col items-center text-center space-y-6">
-            <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 mb-2">
-              <FileText size={40} />
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold">{t.localTitle}</h3>
-              <p className="text-sm text-gray-400 leading-relaxed px-4">
-                {t.localDesc}
-              </p>
-            </div>
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          {view === 'menu' ? (
+            <div className="grid gap-4">
+              {/* Opção Nuvem */}
+              <button onClick={() => setView('cloud')} className="w-full p-6 bg-white/5 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-all border border-white/5 group">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-colors">
+                    <Database className="text-purple-500" size={24} />
+                  </div>
+                  <div className="text-left">
+                    <span className="block font-bold text-white">Nuvem Supabase</span>
+                    <span className="block text-[10px] text-gray-500 uppercase font-black tracking-widest mt-1">Ver salvos online</span>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-gray-600" />
+              </button>
 
-            <input 
-              type="file" 
-              accept=".txt" 
-              onChange={handleFileChange}
-              className="hidden" 
-              id="file-upload"
-            />
-            
-            <label 
-              htmlFor="file-upload"
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold cursor-pointer transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 active:scale-[0.98]"
-            >
-              <UploadCloud size={20} />
-              {t.selectFile}
-            </label>
-          </div>
-
-          {/* Divisória Suave */}
-          <div className="mt-10 pt-6 border-t border-white/5">
-            <h4 className="text-[11px] font-black uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
-              <HardDrive size={12} />
-              {t.history}
-            </h4>
-            
-            <div className="bg-black/20 rounded-2xl p-6 border border-white/5 italic text-sm text-gray-600 text-center">
-              {/* Futuramente você poderá usar listWheels() aqui para listar as rodas do Supabase */}
-              {t.noHistory}
+              {/* Opção Local */}
+              <input type="file" accept=".txt" ref={fileInputRef} onChange={handleLocalFile} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="w-full p-6 bg-white/5 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-all border border-white/5 group">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
+                    <FileUp className="text-blue-500" size={24} />
+                  </div>
+                  <div className="text-left">
+                    <span className="block font-bold text-white">Ficheiro Local</span>
+                    <span className="block text-[10px] text-gray-500 uppercase font-black tracking-widest mt-1">Carregar do dispositivo</span>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-gray-600" />
+              </button>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                <input 
+                  placeholder="Pesquisar..." 
+                  value={searchTerm} 
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-11 py-3 text-sm focus:ring-2 focus:ring-purple-500/50 outline-none transition-all"
+                />
+              </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-[#181819] flex justify-end">
-          <button 
-            onClick={onClose}
-            className="text-sm font-bold text-gray-400 hover:text-white transition-colors"
-          >
-            {t.close}
-          </button>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                  <Loader2 className="animate-spin mb-4" size={32} />
+                  <span className="text-[10px] font-black uppercase tracking-[3px]">Sincronizando...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Container Dinâmico: Lista ou Grelha */}
+                  <div className={showAll || searchTerm !== "" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
+                    {filtered.map(wheel => (
+                      <button 
+                        key={wheel.id} 
+                        onClick={() => { onLoadWheel(wheel.id); onClose(); }} 
+                        className={`w-full p-4 bg-white/[0.02] rounded-2xl flex border border-white/5 group transition-all hover:bg-white/[0.06] ${showAll || searchTerm !== "" ? 'flex-col items-start gap-3' : 'items-center justify-between'}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-white/5 rounded-lg group-hover:bg-purple-500/20 transition-colors">
+                            <Database size={16} className="text-gray-500 group-hover:text-purple-400" />
+                          </div>
+                          <div className="text-left">
+                            <span className="block font-bold text-sm text-gray-200 group-hover:text-white truncate max-w-[150px]">
+                              {wheel.name}
+                            </span>
+                            <span className="text-[9px] text-gray-600 flex items-center gap-1 uppercase font-bold mt-1 tracking-wider">
+                              <Clock size={10} /> {new Date(wheel.updated_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        {!(showAll || searchTerm !== "") && <ChevronRight size={14} className="text-gray-700" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  {!showAll && searchTerm === "" && wheels.length > 4 && (
+                    <button 
+                      onClick={() => setShowAll(true)}
+                      className="w-full py-4 mt-2 border border-dashed border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-[3px] text-gray-500 hover:text-white hover:bg-purple-500/5 hover:border-purple-500/20 transition-all flex items-center justify-center gap-2"
+                    >
+                      <LayoutGrid size={14} />
+                      Ver todos os projetos em grelha ({wheels.length})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function FolderOpen({ size, className }: { size: number, className: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2" />
-    </svg>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import {
   Settings, Plus, Trash2, Trophy,
-  FilePlus, FolderOpen, Save, Share2, BarChart3,
+  FilePlus, FolderOpen, Save, BarChart3,
   Maximize2, Minimize2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -12,7 +12,6 @@ import SettingsModal from '@/components/SettingsModal';
 import WheelCanvas from '@/components/Wheelcanvas'; 
 import SaveModal from '@/components/SaveModal';
 import OpenModal from '@/components/OpenModal';
-import ShareModal from '@/components/ShareModal';
 import StatsPanel from '@/components/StatsPanel';
 import { useWheelPersistence } from '@/hooks/useWheelPersistence';
 import { supabase } from '@/hooks/supabaseClient';
@@ -23,7 +22,7 @@ const translations = {
     entries: "Entradas", results: "Resultados", chances: "Chances",
     placeholder: "Nome", winnerMsg: "Temos um vencedor!", continue: "Continuar",
     saveName: "Nome da roda", stock: "Stock", prob: "Prob %", outOfStock: "Sem stock",
-    addEntry: "Adicionar",
+    addEntry: "Add",
   },
   en: {
     new: "New", open: "Open", save: "Save", share: "Share",
@@ -38,13 +37,10 @@ export default function WheelPage() {
   const {
     rawText, setRawText,
     results, setResults,
-    currentWheelId,
-    loading: dbLoading,
     saveToSupabase,
     loadFromSupabase,
     listWheels,
     addResult,
-    clearResults,
   } = useWheelPersistence();
 
   const [lang, setLang] = useState<'pt' | 'en'>('pt');
@@ -70,17 +66,18 @@ export default function WheelPage() {
     showRemoveButton: true,
     spinTime: 10,
     maxNames: 1000,
+    probMode: 'automatic', 
   });
 
-  const parsedEntries = React.useMemo(() => {
+  const parsedEntries = useMemo(() => {
     return rawText.split('\n')
       .filter(line => line.trim() !== '')
       .map(line => {
-        const [nome, stock, prob] = line.split(',').map(s => s.trim());
+        const parts = line.split(',').map(s => s.trim());
         return {
-          nome: nome || "Item",
-          quantidade: parseInt(stock) || 0,
-          probabilidade: parseInt(prob) || 1
+          nome: parts[0] || "", 
+          quantidade: parseInt(parts[1]) || 0,
+          probabilidade: parseInt(parts[2]) || 1
         };
       });
   }, [rawText]);
@@ -93,8 +90,9 @@ export default function WheelPage() {
   }, []);
 
   const toggleFullscreen = () => {
+    if (!wheelContainerRef.current) return;
     if (!document.fullscreenElement) {
-      wheelContainerRef.current?.requestFullscreen();
+      wheelContainerRef.current.requestFullscreen();
       setIsFullscreen(true);
     } else {
       document.exitFullscreen();
@@ -122,13 +120,12 @@ export default function WheelPage() {
     if (nameInput?.value.trim()) {
       const nome = nameInput.value.trim();
       const stock = qtyInput.value || "1";
-      const prob = probInput.value || "10";
+      const prob = probInput?.value || "10";
       const newEntry = `${nome}, ${stock}, ${prob}`;
-      setRawText((prev: string) => (prev ? `${prev}\n${newEntry}` : newEntry));
-      
+      setRawText((prev: string) => (prev ? `${newEntry}\n${prev}` : newEntry));
       nameInput.value = '';
       qtyInput.value = '1';
-      probInput.value = '10';
+      if (probInput) probInput.value = '10';
       nameInput.focus();
     }
   };
@@ -146,9 +143,8 @@ export default function WheelPage() {
   const handleSaveWheel = async (wheelName: string) => {
     try {
       await saveToSupabase(wheelName);
-      alert(lang === 'pt' ? 'Roda salva com sucesso!' : 'Wheel saved successfully!');
     } catch (error) {
-      alert(lang === 'pt' ? 'Erro ao salvar' : 'Error saving');
+      console.error("Erro ao salvar roda");
     }
   };
 
@@ -198,8 +194,20 @@ export default function WheelPage() {
               onStockDecrease={handleStockDecrease}
               onWinner={async (nome) => {
                 await addResult(nome);
-                isFullscreen ? setFullscreenWinner(nome) : setWinner(nome);
-                if (appSettings.launchConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                if (isFullscreen) {
+                  setFullscreenWinner(nome);
+                } else {
+                  setWinner(nome);
+                }
+
+                if (appSettings.launchConfetti) {
+                  confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.5 },
+                    zIndex: 9999,
+                  });
+                }
               }}
             />
           </div>
@@ -208,31 +216,41 @@ export default function WheelPage() {
         {!isFullscreen && (
           <div className="w-full md:w-[420px] flex flex-col gap-6 h-full max-h-[calc(100vh-10rem)]">
             <div className="bg-[#0f0f0f] rounded-[48px] border border-white/5 flex flex-col flex-1 shadow-2xl overflow-hidden">
-              <div className="flex p-2 bg-black/40 border-b border-white/5">
+              <div className="flex p-2 bg-black/40 border-b border-white/5 flex-shrink-0">
                 <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')} label={`${t.entries} (${totalStock})`} />
                 <TabButton active={activeTab === 'results'} onClick={() => setActiveTab('results')} label={`${t.results} (${results.length})`} />
               </div>
 
               <div className="flex-1 p-8 flex flex-col overflow-hidden">
                 {activeTab === 'entries' ? (
-                  <div className="flex flex-col h-full gap-4">
-                    <div className="grid grid-cols-12 gap-2">
-                      <input id="new-name-input" type="text" placeholder={t.placeholder} className="col-span-6 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none" />
-                      <input id="new-qty-input" type="number" defaultValue="1" title={t.stock} className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center focus:border-blue-500/50 outline-none" />
-                      <input id="new-prob-input" type="number" defaultValue="10" title={t.prob} className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center focus:border-blue-500/50 outline-none" />
+                  <div className="flex flex-col h-full gap-4 overflow-hidden">
+                    {/* Cabeçalhos Alinhados */}
+                    <div className="grid grid-cols-12 gap-2 px-1">
+                      <label className={`${appSettings.probMode === 'manual' ? 'col-span-6' : 'col-span-8'} text-[10px] uppercase font-black text-gray-500 tracking-widest ml-2`}>
+                        {t.placeholder}
+                      </label>
+                      <label className="col-span-2 text-[10px] uppercase font-black text-gray-500 tracking-widest text-center">
+                        {t.stock}
+                      </label>
+                      {appSettings.probMode === 'manual' && (
+                        <label className="col-span-2 text-[10px] uppercase font-black text-gray-500 tracking-widest text-center text-blue-500/70">
+                          {t.prob}
+                        </label>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-2 flex-shrink-0">
+                      <input id="new-name-input" type="text" placeholder={t.placeholder} className={`${appSettings.probMode === 'manual' ? 'col-span-6' : 'col-span-8'} bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all`} />
+                      <input id="new-qty-input" type="number" defaultValue="1" className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center outline-none" />
+                      {appSettings.probMode === 'manual' && (
+                        <input id="new-prob-input" type="number" defaultValue="10" className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center outline-none" />
+                      )}
                       <button onClick={addItem} className="col-span-2 bg-blue-500 rounded-xl text-white flex items-center justify-center hover:bg-blue-600 transition-all"><Plus size={20} /></button>
                     </div>
 
-                    <div className="flex items-center gap-3 px-3 text-[10px] font-black uppercase text-gray-600 tracking-widest">
-                      <span className="flex-1">{t.placeholder}</span>
-                      <span className="w-12 text-center">{t.stock}</span>
-                      <span className="w-12 text-center">{t.prob}</span>
-                      <span className="w-4" />
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
                       {parsedEntries.map((item, index) => (
-                        <div key={index} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${item.quantidade === 0 ? 'bg-red-500/5 border-red-500/20 opacity-50' : 'bg-white/[0.03] border-white/5'} group`}>
+                        <div key={index} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${item.quantidade === 0 ? 'bg-red-500/5 border-red-500/20 opacity-50' : 'bg-white/[0.03] border-white/5'}`}>
                           <input 
                             type="text" 
                             value={item.nome} 
@@ -243,32 +261,38 @@ export default function WheelPage() {
                             }}
                             className="flex-1 bg-transparent text-sm font-bold outline-none text-gray-300 focus:text-white" 
                           />
+                          
                           <input 
                             type="number" 
-                            value={item.quantidade} 
-                            className="w-12 bg-white/5 rounded-lg text-xs text-center border border-white/10 outline-none"
+                            value={item.quantidade === 0 ? "" : item.quantidade} 
+                            placeholder="0"
+                            className="w-12 bg-white/5 rounded-lg text-xs text-center border border-white/10 outline-none focus:border-blue-500/50"
                             onChange={(e) => {
+                               const val = e.target.value;
                                const updated = [...parsedEntries];
-                               updated[index].quantidade = parseInt(e.target.value) || 0;
+                               updated[index].quantidade = val === "" ? 0 : parseInt(val);
                                setRawText(updated.map(ie => `${ie.nome}, ${ie.quantidade}, ${ie.probabilidade}`).join('\n'));
                             }}
                           />
-                          <input 
-                            type="number" 
-                            value={item.probabilidade} 
-                            className="w-12 bg-blue-500/10 rounded-lg text-xs text-center border border-blue-500/20 text-blue-400 outline-none"
-                            onChange={(e) => {
-                               const updated = [...parsedEntries];
-                               updated[index].probabilidade = parseInt(e.target.value) || 1;
-                               setRawText(updated.map(ie => `${ie.nome}, ${ie.quantidade}, ${ie.probabilidade}`).join('\n'));
-                            }}
-                          />
+
+                          {appSettings.probMode === 'manual' && (
+                            <input 
+                              type="number" 
+                              value={item.probabilidade} 
+                              className="w-12 bg-blue-500/10 rounded-lg text-xs text-center border border-blue-500/20 text-blue-400 outline-none"
+                              onChange={(e) => {
+                                 const updated = [...parsedEntries];
+                                 updated[index].probabilidade = parseInt(e.target.value) || 1;
+                                 setRawText(updated.map(ie => `${ie.nome}, ${ie.quantidade}, ${ie.probabilidade}`).join('\n'));
+                              }}
+                            />
+                          )}
                           <button 
                             onClick={() => {
                               const updated = parsedEntries.filter((_, i) => i !== index);
                               setRawText(updated.map(ie => `${ie.nome}, ${ie.quantidade}, ${ie.probabilidade}`).join('\n'));
                             }}
-                            className="text-gray-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            className="text-red-500/50 hover:text-red-500 transition-all flex-shrink-0"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -277,24 +301,11 @@ export default function WheelPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                    {/* AQUI: slice().reverse() para o último resultado aparecer por cima */}
+                  <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar">
                     {results.slice().reverse().map((res, i) => (
-                      <div key={i} className={`flex justify-between items-center p-5 rounded-[24px] border border-white/5 transition-all ${i === 0 ? 'bg-blue-500/5 border-blue-500/20' : 'bg-white/[0.02]'} group`}>
-                        <div className="flex items-center gap-3">
-                          {i === 0 && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
-                          <span className={`font-bold text-sm ${i === 0 ? 'text-white' : 'text-gray-400'}`}>{res}</span>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            // Calcula o index original para remover corretamente
-                            const originalIdx = results.length - 1 - i;
-                            setResults(results.filter((_, idx) => idx !== originalIdx));
-                          }} 
-                          className="text-gray-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                      <div key={i} className="flex justify-between items-center p-5 rounded-[24px] border border-white/5 bg-white/[0.02]">
+                        <span className="font-bold text-sm text-gray-400">{res}</span>
+                        <button onClick={() => setResults(results.filter((_, idx) => idx !== (results.length - 1 - i)))} className="text-red-500/50 hover:text-red-500"><Trash2 size={14} /></button>
                       </div>
                     ))}
                   </div>
@@ -307,14 +318,30 @@ export default function WheelPage() {
 
       {modals.stats && <StatsPanel entries={parsedEntries} onClose={() => setModals({ ...modals, stats: false })} />}
       {modals.settings && <SettingsModal lang={lang} settings={appSettings} setSettings={setAppSettings} onClose={() => setModals({ ...modals, settings: false })} />}
-      {modals.save && <SaveModal lang={lang} onClose={() => setModals({ ...modals, save: false })} entries={rawText.split('\n')} onSave={handleSaveWheel} />}
-      {modals.open && <OpenModal lang={lang} onClose={() => setModals({ ...modals, open: false })} onLoadData={(data) => setRawText(data)} listWheels={listWheels} onLoadWheel={loadFromSupabase} />}
+      
+      {modals.save && (
+        <SaveModal 
+          lang={lang} 
+          onClose={() => setModals({ ...modals, save: false })} 
+          entries={rawText.split('\n')} 
+          onSave={handleSaveWheel} 
+        />
+      )}
+      
+      {modals.open && (
+        <OpenModal 
+          lang={lang} 
+          onClose={() => setModals({ ...modals, open: false })} 
+          setRawText={setRawText} 
+          listWheels={listWheels} 
+          onLoadWheel={loadFromSupabase} 
+        />
+      )}
 
       {winner && !isSpinning && (
-        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-in fade-in duration-500">
-          <div className="bg-[#0f0f0f] border border-white/10 p-12 rounded-[56px] text-center max-w-sm w-full relative shadow-2xl">
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-xl">
+          <div className="bg-[#0f0f0f] border border-white/10 p-12 rounded-[56px] text-center max-w-sm w-full shadow-2xl">
             <Trophy size={40} className="mx-auto mb-8 text-blue-500" />
-            <h3 className="text-blue-500 font-black uppercase text-[10px] tracking-[5px] mb-3">{t.winnerMsg}</h3>
             <div className="text-5xl font-black text-white mb-12 tracking-tighter">{winner}</div>
             <button onClick={() => setWinner(null)} className="w-full py-6 bg-white text-black font-black rounded-[24px] uppercase tracking-[2px] hover:bg-gray-200 transition-all">{t.continue}</button>
           </div>
