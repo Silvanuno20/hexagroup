@@ -120,9 +120,14 @@ export default function WheelPage() {
     if (nameInput?.value.trim()) {
       const nome = nameInput.value.trim();
       const stock = qtyInput.value || "1";
-      const prob = probInput?.value || "10";
-      const newEntry = `${nome}, ${stock}, ${prob}`;
+      
+      // Trava de 100% na adição
+      let probVal = parseInt(probInput?.value || "10");
+      if (probVal > 100) probVal = 100;
+
+      const newEntry = `${nome}, ${stock}, ${probVal}`;
       setRawText((prev: string) => (prev ? `${newEntry}\n${prev}` : newEntry));
+      
       nameInput.value = '';
       qtyInput.value = '1';
       if (probInput) probInput.value = '10';
@@ -243,7 +248,7 @@ export default function WheelPage() {
                       <input id="new-name-input" type="text" placeholder={t.placeholder} className={`${appSettings.probMode === 'manual' ? 'col-span-6' : 'col-span-8'} bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-blue-500/50 outline-none transition-all`} />
                       <input id="new-qty-input" type="number" defaultValue="1" className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center outline-none" />
                       {appSettings.probMode === 'manual' && (
-                        <input id="new-prob-input" type="number" defaultValue="10" className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center outline-none" />
+                        <input id="new-prob-input" type="number" min="1" max="100" defaultValue="10" className="col-span-2 bg-white/5 border border-white/10 rounded-xl px-2 py-3 text-sm text-center outline-none focus:border-blue-500/50" />
                       )}
                       <button onClick={addItem} className="col-span-2 bg-blue-500 rounded-xl text-white flex items-center justify-center hover:bg-blue-600 transition-all"><Plus size={20} /></button>
                     </div>
@@ -278,11 +283,15 @@ export default function WheelPage() {
                           {appSettings.probMode === 'manual' && (
                             <input 
                               type="number" 
+                              min="1"
+                              max="100"
                               value={item.probabilidade} 
-                              className="w-12 bg-blue-500/10 rounded-lg text-xs text-center border border-blue-500/20 text-blue-400 outline-none"
+                              className="w-12 bg-blue-500/10 rounded-lg text-xs text-center border border-blue-500/20 text-blue-400 outline-none focus:ring-1 focus:ring-blue-500/50"
                               onChange={(e) => {
                                  const updated = [...parsedEntries];
-                                 updated[index].probabilidade = parseInt(e.target.value) || 1;
+                                 let val = parseInt(e.target.value) || 0;
+                                 if (val > 100) val = 100; // Trava de 100% na edição
+                                 updated[index].probabilidade = val;
                                  setRawText(updated.map(ie => `${ie.nome}, ${ie.quantidade}, ${ie.probabilidade}`).join('\n'));
                               }}
                             />
