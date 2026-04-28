@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { X, Volume2, Trophy, Clock, Trash2, PartyPopper, Dices } from 'lucide-react';
+import { X, Volume2, VolumeX, Trophy, Clock, Trash2, PartyPopper, Dices } from 'lucide-react';
 
 interface SettingsModalProps {
   lang: 'pt' | 'en';
@@ -13,6 +13,7 @@ const translations = {
   pt: {
     title: "Customizar",
     volume: "Volume do Som",
+    mute: "Modo Silencioso",
     spinTime: "Tempo de Rotação (segundos)",
     confetti: "Lançar Confetes ao vencer",
     popup: "Mostrar Janela do Vencedor",
@@ -20,12 +21,13 @@ const translations = {
     msgLabel: "Mensagem de Vitória",
     close: "Fechar",
     modeLabel: "Modo de Probabilidade",
-    autoMode: "Automático (Stock)",
-    manualMode: "Manual (Peso)"
+    autoMode: "Automático",
+    manualMode: "Manual"
   },
   en: {
     title: "Customize",
     volume: "Sound Volume",
+    mute: "Silent Mode",
     spinTime: "Spin Time (seconds)",
     confetti: "Launch Confetti on win",
     popup: "Show Winner Popup",
@@ -33,8 +35,8 @@ const translations = {
     msgLabel: "Victory Message",
     close: "Close",
     modeLabel: "Probability Mode",
-    autoMode: "Automatic (Stock)",
-    manualMode: "Manual (Weight)"
+    autoMode: "Automatic",
+    manualMode: "Manual"
   }
 };
 
@@ -50,14 +52,14 @@ export default function SettingsModal({ lang, settings, setSettings, onClose }: 
       <div className="bg-[#1e1e1e] w-full max-w-lg rounded-[32px] border border-white/10 shadow-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-[#252526]">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Settings className="text-blue-500" size={22} /> {t.title}
+            <SettingsIcon className="text-blue-500" size={22} /> {t.title}
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-gray-400"><X size={20} /></button>
         </div>
 
         <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           
-          {/* Novo: Seletor de Modo Automático/Manual */}
+          {/* Modo de Probabilidade */}
           <div className="space-y-3">
             <label className="flex items-center gap-2 text-sm font-bold text-gray-300">
               <Dices size={18} className="text-blue-500" /> {t.modeLabel}
@@ -80,20 +82,30 @@ export default function SettingsModal({ lang, settings, setSettings, onClose }: 
 
           <div className="h-px bg-white/5 my-2" />
 
-          {/* Volume */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-bold text-gray-300">
-              <Volume2 size={18} className="text-blue-500" /> {t.volume}: {settings.volume}%
-            </label>
-            <input 
-              type="range" min="0" max="100" 
-              value={settings.volume} 
-              onChange={(e) => update('volume', parseInt(e.target.value))}
-              className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          {/* Seção de Áudio: Mute e Volume */}
+          <div className="space-y-4">
+            <Toggle 
+              label={t.mute} 
+              icon={settings.isMuted ? <VolumeX size={18} className="text-red-500" /> : <Volume2 size={18} />} 
+              active={settings.isMuted} 
+              onClick={() => update('isMuted', !settings.isMuted)} 
+              variant="danger"
             />
+
+            <div className={`space-y-3 transition-all duration-300 ${settings.isMuted ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+              <label className="flex items-center gap-2 text-sm font-bold text-gray-300">
+                <Volume2 size={18} className="text-blue-500" /> {t.volume}: {settings.volume}%
+              </label>
+              <input 
+                type="range" min="0" max="100" 
+                value={settings.volume} 
+                onChange={(e) => update('volume', parseInt(e.target.value))}
+                className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
           </div>
 
-          {/* Tempo */}
+          {/* Tempo de Rotação */}
           <div className="space-y-3">
             <label className="flex items-center gap-2 text-sm font-bold text-gray-300">
               <Clock size={18} className="text-blue-500" /> {t.spinTime}: {settings.spinTime}s
@@ -108,7 +120,7 @@ export default function SettingsModal({ lang, settings, setSettings, onClose }: 
 
           <div className="h-px bg-white/5 my-2" />
 
-          {/* Toggles */}
+          {/* Toggles de Comportamento */}
           <div className="space-y-4">
             <Toggle label={t.confetti} icon={<PartyPopper size={18}/>} active={settings.launchConfetti} onClick={() => update('launchConfetti', !settings.launchConfetti)} />
             <Toggle label={t.popup} icon={<Trophy size={18}/>} active={settings.showWinnerPopup} onClick={() => update('showWinnerPopup', !settings.showWinnerPopup)} />
@@ -124,15 +136,18 @@ export default function SettingsModal({ lang, settings, setSettings, onClose }: 
   );
 }
 
-function Toggle({ label, icon, active, onClick }: any) {
+// Componente de Toggle atualizado para suportar cores diferentes (ex: vermelho para mute)
+function Toggle({ label, icon, active, onClick, variant = 'primary' }: any) {
+  const activeBg = variant === 'danger' ? 'bg-red-600' : 'bg-blue-600';
+  
   return (
     <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
       <div className="flex items-center gap-3 text-sm font-medium">
-        <span className="text-blue-500">{icon}</span> {label}
+        <span className={active && variant === 'danger' ? 'text-red-500' : 'text-blue-500'}>{icon}</span> {label}
       </div>
       <button 
         onClick={onClick}
-        className={`w-12 h-6 rounded-full transition-all relative ${active ? 'bg-blue-600' : 'bg-gray-700'}`}
+        className={`w-12 h-6 rounded-full transition-all relative ${active ? activeBg : 'bg-gray-700'}`}
       >
         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${active ? 'right-1' : 'left-1'}`} />
       </button>
@@ -140,6 +155,7 @@ function Toggle({ label, icon, active, onClick }: any) {
   );
 }
 
-function Settings({ size, className }: any) {
+// Renomeado para evitar conflito com o nome do componente principal
+function SettingsIcon({ size, className }: any) {
   return <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 }

@@ -14,7 +14,8 @@ interface WheelProps {
   settings: {
     volume: number;
     spinTime: number;
-    probMode: string; // Adicionado para suportar o novo modo
+    probMode: string;
+    isMuted: boolean; // Campo essencial para o modo silencioso
   };
   onWinner: (name: string, probability: number) => void;
   setIsSpinning: (state: boolean) => void;
@@ -37,18 +38,15 @@ export default function WheelCanvas({
 
   const activeEntries = entries.filter((e) => e.quantidade > 0);
 
-  // --- CÁLCULO DE PROBABILIDADE TOTAL DINÂMICO ---
   const totalWeight = useMemo(() => {
     if (settings.probMode === 'manual') {
       return activeEntries.reduce((acc, cur) => acc + (Number(cur.probabilidade) || 0), 0);
     }
-    // Modo Automático usa a quantidade (stock) como peso
     return activeEntries.reduce((acc, cur) => acc + (Number(cur.quantidade) || 0), 0);
   }, [activeEntries, settings.probMode]);
 
   const getSlices = useCallback(() => {
     if (activeEntries.length === 0) return [];
-    // Visualmente as fatias são sempre iguais
     const sliceAngle = (Math.PI * 2) / activeEntries.length;
     
     return activeEntries.map((entry, index) => {
@@ -63,7 +61,10 @@ export default function WheelCanvas({
 
   const playTick = useCallback(() => {
     const ctx = audioCtxRef.current;
-    if (!ctx || ctx.state === 'suspended') return;
+    
+    // VERIFICAÇÃO DO MODO SILENCIOSO
+    if (!ctx || ctx.state === 'suspended' || settings.isMuted) return;
+
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     oscillator.type = 'square';
@@ -74,7 +75,7 @@ export default function WheelCanvas({
     gain.connect(ctx.destination);
     oscillator.start();
     oscillator.stop(ctx.currentTime + 0.1);
-  }, [settings.volume]);
+  }, [settings.volume, settings.isMuted]); // Dependências atualizadas
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -160,7 +161,6 @@ export default function WheelCanvas({
       if (computed[idx]) {
         const winner = computed[idx].entry;
         onStockDecrease(winner.nome);
-        // Calcula a probabilidade ganha para mostrar no resultado
         const currentWeight = settings.probMode === 'manual' ? winner.probabilidade : winner.quantidade;
         const winnerProb = (currentWeight / totalWeight) * 100;
         onWinner(winner.nome, winnerProb);
@@ -175,18 +175,30 @@ export default function WheelCanvas({
     setIsSpinning(true);
     lastTickIndex.current = -1;
 
-    // --- SORTEIO PONDERADO ADAPTÁVEL ---
-    let rand = Math.random() * totalWeight;
     let selectedIndex = 0;
-    for (let i = 0; i < activeEntries.length; i++) {
-      const weight = settings.probMode === 'manual' ? activeEntries[i].probabilidade : activeEntries[i].quantidade;
-      if (rand < weight) {
-        selectedIndex = i;
-        break;
+
+    const guaranteed = settings.probMode === 'manual' 
+      ? activeEntries.find(e => e.probabilidade >= 100)
+      : null;
+
+    if (guaranteed) {
+      selectedIndex = activeEntries.indexOf(guaranteed);
+    } else {
+      let rand = Math.random() * totalWeight;
+      for (let i = 0; i < activeEntries.length; i++) {
+        const weight = settings.probMode === 'manual' 
+          ? activeEntries[i].probabilidade 
+          : activeEntries[i].quantidade;
+
+        if (rand < weight) {
+          selectedIndex = i;
+          break;
+        }
+        rand -= weight;
       }
-      rand -= weight;
     }
 
+    currentAngle.current = currentAngle.current % (Math.PI * 2);
     angularVelocity.current = 0.3 + (Math.random() * 0.2); 
     requestRef.current = requestAnimationFrame(animate);
   };
@@ -212,4 +224,4 @@ export default function WheelCanvas({
       />
     </div>
   );
-}
+} 
